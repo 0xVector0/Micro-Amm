@@ -76,14 +76,29 @@ pub fn swap(ctx: Context<SwapAccount>, amount_x: u64) -> Result<()> {
     token::transfer(CpiContext::new(cpi_program, cpi_accounts), amount_x)?;
 
     // Transfer token Y from the vault to the user
+    let seeds = &[
+        b"pool",
+        ctx.accounts.pool.token_x_mint.as_ref(),
+        ctx.accounts.pool.token_y_mint.as_ref(),
+        &[ctx.accounts.pool.bump],
+    ];
+    let signer_seeds = &[&seeds[..]];
+    
     let cpi_accounts = Transfer {
         from: ctx.accounts.token_y_vault.to_account_info(),
         to: ctx.accounts.user_token_y.to_account_info(),
-        authority: ctx.accounts.token_y_vault.to_account_info(),
+        authority: ctx.accounts.pool.to_account_info(),
     };
     
     let cpi_program = ctx.accounts.token_program.to_account_info();
-    token::transfer(CpiContext::new(cpi_program, cpi_accounts), amount_y)?;
+    token::transfer(
+        CpiContext::new_with_signer(cpi_program, cpi_accounts, signer_seeds), 
+        amount_y
+    )?;
+
+    // Update the pool balances
+    ctx.accounts.pool.token_x_balance += amount_x;
+    ctx.accounts.pool.token_y_balance -= amount_y;
 
     Ok(())
 }
